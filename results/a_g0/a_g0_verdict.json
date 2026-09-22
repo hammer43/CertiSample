@@ -1,0 +1,131 @@
+{
+  "gate": "A-G0",
+  "official": true,
+  "n_test_instances": 30,
+  "K": 20,
+  "replicates": 10,
+  "comparator": "simulated_annealing_is",
+  "rydberg_schedule": {
+    "config_index": 9,
+    "duration_units": 40,
+    "delta_final_units": 2,
+    "T_ns": 2784,
+    "pilot_mean_nearest_jaccard": 0.31327542281065324,
+    "pilot_radius_coverage": 0.3054661777114398
+  },
+  "mean_delta_d": -0.07233104287907446,
+  "LB95_delta_d": -0.08132010151658489,
+  "mean_delta_c": -0.18453553784100613,
+  "LB95_delta_c": -0.20681715931254008,
+  "decision": "FAIL",
+  "interpretation": "retire the constrained-sampling track; build no recourse/cut machinery for it",
+  "per_arm_means": {
+    "constraint_aware_gibbs": {
+      "mean_nearest_jaccard": 0.2406,
+      "radius_coverage_fraction": 0.4997,
+      "worst_case_jaccard_radius": 0.5909,
+      "swap_component_coverage": 0.8529,
+      "unique_in_window": 11.6,
+      "infeasible_fraction": 0.0,
+      "out_of_window_fraction": 0.1435,
+      "duplicate_fraction": 0.2777,
+      "energy_evals": 60000.0
+    },
+    "randomized_greedy_ls": {
+      "mean_nearest_jaccard": 0.327,
+      "radius_coverage_fraction": 0.3325,
+      "worst_case_jaccard_radius": 0.6958,
+      "swap_component_coverage": 0.5742,
+      "unique_in_window": 4.87,
+      "infeasible_fraction": 0.0,
+      "out_of_window_fraction": 0.0098,
+      "duplicate_fraction": 0.7477,
+      "energy_evals": 1535.8633
+    },
+    "rydberg_ideal": {
+      "mean_nearest_jaccard": 0.3039,
+      "radius_coverage_fraction": 0.3353,
+      "worst_case_jaccard_radius": 0.6804,
+      "swap_component_coverage": 0.8314,
+      "unique_in_window": 10.0167,
+      "infeasible_fraction": 0.0027,
+      "out_of_window_fraction": 0.2977,
+      "duplicate_fraction": 0.2127,
+      "energy_evals": NaN
+    },
+    "simulated_annealing_is": {
+      "mean_nearest_jaccard": 0.2316,
+      "radius_coverage_fraction": 0.5198,
+      "worst_case_jaccard_radius": 0.5718,
+      "swap_component_coverage": 0.8309,
+      "unique_in_window": 11.2367,
+      "infeasible_fraction": 0.0,
+      "out_of_window_fraction": 0.1378,
+      "duplicate_fraction": 0.3035,
+      "energy_evals": 40000.0
+    }
+  },
+  "secondary_K_curve": [
+    {
+      "arm": "rydberg_ideal",
+      "K": 5,
+      "mean_nearest_jaccard": 0.4321,
+      "radius_coverage_fraction": 0.1455
+    },
+    {
+      "arm": "rydberg_ideal",
+      "K": 10,
+      "mean_nearest_jaccard": 0.3612,
+      "radius_coverage_fraction": 0.2365
+    },
+    {
+      "arm": "rydberg_ideal",
+      "K": 20,
+      "mean_nearest_jaccard": 0.3039,
+      "radius_coverage_fraction": 0.3353
+    },
+    {
+      "arm": "rydberg_ideal",
+      "K": 40,
+      "mean_nearest_jaccard": 0.2522,
+      "radius_coverage_fraction": 0.4425
+    },
+    {
+      "arm": "rydberg_ideal",
+      "K": 80,
+      "mean_nearest_jaccard": 0.204,
+      "radius_coverage_fraction": 0.5469
+    },
+    {
+      "arm": "simulated_annealing_is",
+      "K": 5,
+      "mean_nearest_jaccard": 0.3732,
+      "radius_coverage_fraction": 0.2225
+    },
+    {
+      "arm": "simulated_annealing_is",
+      "K": 10,
+      "mean_nearest_jaccard": 0.2964,
+      "radius_coverage_fraction": 0.3595
+    },
+    {
+      "arm": "simulated_annealing_is",
+      "K": 20,
+      "mean_nearest_jaccard": 0.2316,
+      "radius_coverage_fraction": 0.5198
+    },
+    {
+      "arm": "simulated_annealing_is",
+      "K": 40,
+      "mean_nearest_jaccard": 0.1795,
+      "radius_coverage_fraction": 0.6692
+    },
+    {
+      "arm": "simulated_annealing_is",
+      "K": 80,
+      "mean_nearest_jaccard": 0.1395,
+      "radius_coverage_fraction": 0.7844
+    }
+  ],
+  "spec_manifest": "f37b9a764a9463f7bcae0806e7626827175a61a1d3ca0f52c4ebf6afc8b94191  g0_spec.yaml\n30263ff7e75b838d298877166da97fd2a52bb3e28ccdbe3decb11eaeee2d82aa  c_g0_spec.yaml\n378e4ad64b32597a46c44cdb06c1d3fc642c57071d1137423653b67f81d84214  noise_config.json\n"
+}

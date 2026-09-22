@@ -79,6 +79,14 @@ def cmd_rydberg_tune(a):
                      indent=2, default=str))
 
 
+def cmd_a_g0_test(a):
+    from .a_g0_test import run_test
+    r = run_test(Path(a.out), workers=a.workers, curve=not a.no_curve, limit=a.limit)
+    keys = ("official", "comparator", "mean_delta_d", "LB95_delta_d", "mean_delta_c",
+            "LB95_delta_c", "decision", "interpretation")
+    print(json.dumps({k: r[k] for k in keys}, indent=2, default=str))
+
+
 def main(argv=None):
     p = argparse.ArgumentParser(prog="certisample")
     sub = p.add_subparsers(dest="cmd", required=True)
@@ -97,9 +105,16 @@ def main(argv=None):
     R = sub.add_parser("rydberg-tune", help="tune the Rydberg schedule on pilots (resumable)")
     R.add_argument("--out", default="results/a_g0")
     R.add_argument("--workers", type=int, default=1)
+    T = sub.add_parser("a-g0-test", help="held-out test stage and the A-G0 verdict")
+    T.add_argument("--out", default="results/a_g0")
+    T.add_argument("--workers", type=int, default=1)
+    T.add_argument("--no-curve", action="store_true", help="skip the secondary K curve")
+    T.add_argument("--limit", type=int, default=None,
+                   help="DEV ONLY: first N test graphs; output is marked not official")
     a = p.parse_args(argv)
     {"env": cmd_env, "landscape": cmd_landscape, "a-g0-tune": cmd_a_g0,
-     "rydberg-validate": cmd_rydberg_validate, "rydberg-tune": cmd_rydberg_tune}[a.cmd](a)
+     "rydberg-validate": cmd_rydberg_validate, "rydberg-tune": cmd_rydberg_tune,
+     "a-g0-test": cmd_a_g0_test}[a.cmd](a)
 
 
 if __name__ == "__main__":
