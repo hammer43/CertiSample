@@ -1,0 +1,89 @@
+{
+  "stage": "A-G0 classical pilot tuning",
+  "spec_manifest": "f9bf883d214408ac5b34b47c109f73671bfbbd02f26b2223527d623ba49c4405  g0_spec.yaml\n38741f4eb9d4e60c958244499aa079d8587401e7745a838ff41f0c4c0d9c94af  c_g0_spec.yaml\n0162ffca00788f7a3109f135f6491652b98af15fa9601989acf80df57c66f6f5  noise_config.json\n",
+  "K": 20,
+  "replicates": 10,
+  "pilots": [
+    0,
+    1,
+    2,
+    3,
+    4,
+    5,
+    6,
+    7,
+    8,
+    9,
+    10,
+    11,
+    12,
+    13,
+    14,
+    15,
+    16,
+    17,
+    18,
+    19
+  ],
+  "chosen": {
+    "randomized_greedy_ls": {
+      "config_index": 3,
+      "params": {
+        "ls_rounds": 0,
+        "tie_band": 0.2
+      },
+      "pilot_mean_rank": 2.25,
+      "pilot_mean_nearest_jaccard": 0.3263886050364355,
+      "pilot_radius_coverage": 0.33267783658493755
+    },
+    "constraint_aware_gibbs": {
+      "config_index": 6,
+      "params": {
+        "beta": 4,
+        "sweeps": 50,
+        "burn_in_sweeps": 100
+      },
+      "pilot_mean_rank": 1.5,
+      "pilot_mean_nearest_jaccard": 0.2407009780178933,
+      "pilot_radius_coverage": 0.48541203625602247
+    },
+    "simulated_annealing_is": {
+      "config_index": 2,
+      "params": {
+        "beta_final": 8,
+        "sweeps": 100
+      },
+      "pilot_mean_rank": 3.5375,
+      "pilot_mean_nearest_jaccard": 0.23291649322310087,
+      "pilot_radius_coverage": 0.4978756340500424
+    }
+  },
+  "comparator": "simulated_annealing_is",
+  "comparator_table": [
+    {
+      "arm": "simulated_annealing_is",
+      "mean_rank": 1.25,
+      "mnj": 0.23291649322310087,
+      "rcf": 0.4978756340500424
+    },
+    {
+      "arm": "constraint_aware_gibbs",
+      "mean_rank": 1.775,
+      "mnj": 0.2407009780178933,
+      "rcf": 0.48541203625602247
+    },
+    {
+      "arm": "randomized_greedy_ls",
+      "mean_rank": 2.975,
+      "mnj": 0.3263886050364355,
+      "rcf": 0.33267783658493755
+    }
+  ],
+  "implementation_notes": {
+    "gibbs": "independent chain per proposal from the empty set; burn_in_sweeps + sweeps; final state",
+    "annealing": "independent run per proposal from the empty set; geometric beta 0.1 -> beta_final",
+    "sweep": "n single-site heat-bath updates at uniformly random sites",
+    "local_search": "free insertion first, else best weight-improving (1,2)-swap; stop when none"
+  },
+  "note": "test set not touched; runs only after Rydberg schedule selection"
+}

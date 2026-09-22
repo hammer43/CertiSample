@@ -59,6 +59,13 @@ def cmd_landscape(a):
     print(df.describe().round(3).to_string())
 
 
+def cmd_a_g0(a):
+    from .a_g0 import tune_classical
+    sel = tune_classical(Path(a.out), reps=a.reps)
+    print(json.dumps({k: sel[k] for k in ("chosen", "comparator", "comparator_table")},
+                     indent=2, default=str))
+
+
 def main(argv=None):
     p = argparse.ArgumentParser(prog="certisample")
     sub = p.add_subparsers(dest="cmd", required=True)
@@ -68,8 +75,12 @@ def main(argv=None):
     L.add_argument("--out", default="results/landscape")
     L.add_argument("--allow-unfrozen", action="store_true",
                    help="setup check only; the gates themselves always require a frozen spec")
+    A = sub.add_parser("a-g0-tune", help="tune classical arms on pilots and select comparator")
+    A.add_argument("--out", default="results/a_g0")
+    A.add_argument("--reps", type=int, default=None,
+                   help="override replicates (smoke tests only; the frozen value is used by default)")
     a = p.parse_args(argv)
-    {"env": cmd_env, "landscape": cmd_landscape}[a.cmd](a)
+    {"env": cmd_env, "landscape": cmd_landscape, "a-g0-tune": cmd_a_g0}[a.cmd](a)
 
 
 if __name__ == "__main__":
