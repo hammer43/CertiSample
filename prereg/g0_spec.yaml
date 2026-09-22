@@ -1,8 +1,9 @@
 # A-G0: configuration-space breadth of native Rydberg constrained sampling.
 # Pre-registered. Scientific changes require editing this file and re-freezing.
 gate: A-G0
-version: 2
+version: 3
 changelog:
+  - "v3 (before any Rydberg sample was drawn): fixed an internal inconsistency in the Rydberg arm. omega_max = 1.0 in QoolQit units gives a blockade radius of 1.0a, contradicting the stated 1.7a; Omega_max is now 1.7^-6 * J_nn. Schedule grid restated in drive units, DMM amplitude specified (it was missing), and the exact QutipEmulator backend (~4 h per 20-atom run) replaced by a blockade-subspace emulator with a pre-registered validation gate against exact Pulser. Noisy arm deferred. Classical arms, generator, epsilon rule, metrics and pass rule unchanged. Before this version was committed, a first run of the validation gate failed on one case (TV 0.0127, n = 12, schedule (40,4)); diagnosis showed the failure was the reference's own integration error at QuTiP default tolerances (default vs tight Pulser differ by TV 0.0109, while the full-space emulator matches tight Pulser to below 1e-5). The reference tolerances were tightened; the 0.005 threshold is unchanged."
   - "v2 (pilot landscapes only, no sampler data): |Omega| threshold 100 -> 50 and K 50 -> 20, keeping K/|Omega| near 0.25 while tightening eps from ~0.30 to ~0.20; co-primary B changed from swap-component coverage (degenerate: ~3 components, giant share 0.68-0.79) to within-radius coverage fraction."
 question: >
   Does analog Rydberg sampling cover the exact near-optimal MWIS landscape better than
@@ -45,16 +46,27 @@ arms:
       grid: {beta_final: [4, 8, 16, 32], sweeps: [100, 400]}
   quantum:
     rydberg_ideal:
-      config: noise_config.json#ideal
-      schedule_family: "piecewise-linear Omega(t) ramp-up/plateau/ramp-down; Delta(t) linear sweep; DMM detuning eps_i = 1 - w_i (heavier vertices less penalized)"
-      grid: {duration: [5, 10, 20, 40], delta_final: [2.0, 4.0, 6.0], omega_max: [1.0]}
-      units: "QoolQit dimensionless program units"
-      register: "lattice spacing a with blockade radius 1.7a (covers diagonal, excludes distance 2)"
-      feasibility: "sampled bitstrings are checked against the unit-disk graph; violations count as infeasible"
+      backend: "certisample.rydberg.Subspace: states with at most one nearest-neighbour excited pair kept exactly; states beyond eliminated adiabatically to second order"
+      device: "pulser.devices.DigitalAnalogDevice, C6 = 5420158.53 rad um^6/us"
+      register: "lattice spacing a = 5 um; Omega_max = 1.7^-6 * C6 / a^6 (~14.37 rad/us), so the blockade radius is 1.7a"
+      schedule_family: >
+        Omega(t): linear ramp 0 -> Omega_max over 10% of T (rounded to 4 ns), plateau, linear ramp to 0.
+        delta(t): linear sweep -delta_final -> +delta_final over T.
+        DMM: constant amplitude -delta_final with eps_i = 1 - w_i, so atom i's final effective
+        detuning equals w_i * delta_final.
+      grid: {duration_units: [5, 10, 20, 40], delta_final_units: [2, 4, 6]}
+      units: "T = duration_units / Omega_max (rounded to 4 ns); delta_final = delta_final_units * Omega_max"
+      readout: >
+        K samples drawn from the final-state distribution. The evolution is deterministic, so
+        replicates differ only in sampling seed: one simulation per (graph, schedule).
+      feasibility: "samples are checked against the unit-disk graph; any blockaded pair counts as infeasible"
+      validation:
+        reference: "pulser_simulation.QutipEmulator (exact, full Hilbert space), same device, register and waveforms, run with QuTiP atol = 1e-12, rtol = 1e-10, nsteps = 1e7"
+        cases: "first n atoms of pilot graphs 0 and 1; n = 12 with all 12 grid schedules; n = 14 with the shortest and longest schedules"
+        metric: "total variation distance between final-state distributions"
+        pass: "max TV <= 0.005 over all cases; if it fails, the Rydberg arm does not run"
     rydberg_noisy:
-      config: noise_config.json#noisy
-      schedule: "same frozen schedule as rydberg_ideal"
-      role: diagnostic                # reported only; not part of the pass rule
+      status: "deferred: diagnostic only, not in the pass rule. Exact noisy emulation is infeasible at 20 atoms; its backend is specified in a later version before any noisy data is drawn."
   tuning:
     data: pilot_only
     objective: "mean rank across the two co-primaries on pilot graphs"

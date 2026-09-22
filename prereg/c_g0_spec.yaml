@@ -1,6 +1,8 @@
 # C-G0: fixed-register variational continuation (transfer radius).
 gate: C-G0
-version: 1
+version: 2
+changelog:
+  - "v2: units aligned with g0_spec v3 (drive units, Omega_max = 1.7^-6 J_nn, a = 5 um) to remove the same blockade-radius inconsistency; no C-G0 data existed."
 question: >
   With a fixed register and only local detunings changing, does warm-starting from the
   previous optimum reach the same solution quality in fewer evaluations than a cold start?
@@ -30,8 +32,8 @@ perturbation:
 ansatz:
   family: "piecewise-linear Omega(t) and Delta(t), 4 interior knots each (8 parameters), duration fixed"
   duration: 20
-  units: "QoolQit dimensionless program units"
-  cold_init: "canonical adiabatic schedule: Omega ramp 0->1->0, Delta linear -4 -> +4"
+  units: "drive units as in g0_spec v3: time in 1/Omega_max, amplitudes relative to Omega_max, register spacing 5 um"
+  cold_init: "canonical adiabatic schedule: Omega ramp 0 -> Omega_max -> 0, delta linear -4 Omega_max -> +4 Omega_max"
   warm_init: "theta*(h0), the optimum found for the previous fields"
 
 optimization:

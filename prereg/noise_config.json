@@ -8,7 +8,7 @@
     "numpy": "2.4.6"
   },
   "ideal": {
-    "backend": "pulser_simulation.QutipEmulator, noiseless",
+    "backend": "certisample.rydberg.Subspace (see g0_spec v3), validated against pulser_simulation.QutipEmulator",
     "device": "pulser.devices.DigitalAnalogDevice",
     "device_reason": "AnalogDevice has no DMM in pulser 1.9.1; MWIS weights require local detuning",
     "hamiltonian_convention": "H = sum_i Omega(t)/2 X_i - sum_i (Delta(t) + eps_i Delta_dmm(t)) n_i + sum_{i<j} C6 / r_ij^6 n_i n_j",
@@ -16,6 +16,7 @@
     "noise": "none"
   },
   "noisy": {
+    "status": "deferred: exact noisy emulation is infeasible at 20 atoms; the noisy backend is specified in a later version before any noisy data. Noise values below are retained as the intended model.",
     "backend": "pulser_simulation.QutipEmulator with NoiseModel",
     "device": "pulser.devices.DigitalAnalogDevice",
     "noise_model": {

@@ -66,6 +66,19 @@ def cmd_a_g0(a):
                      indent=2, default=str))
 
 
+def cmd_rydberg_validate(a):
+    from .a_g0_rydberg import validate
+    r = validate(Path(a.out))
+    print(json.dumps({k: r[k] for k in ("threshold", "max_TV", "passed")}, indent=2))
+
+
+def cmd_rydberg_tune(a):
+    from .a_g0_rydberg import tune
+    s = tune(Path(a.out), workers=a.workers)
+    print(json.dumps({k: s[k] for k in ("chosen", "infeasible_fraction", "out_of_window_fraction")},
+                     indent=2, default=str))
+
+
 def main(argv=None):
     p = argparse.ArgumentParser(prog="certisample")
     sub = p.add_subparsers(dest="cmd", required=True)
@@ -79,8 +92,14 @@ def main(argv=None):
     A.add_argument("--out", default="results/a_g0")
     A.add_argument("--reps", type=int, default=None,
                    help="override replicates (smoke tests only; the frozen value is used by default)")
+    V = sub.add_parser("rydberg-validate", help="validation gate: subspace emulator vs exact Pulser")
+    V.add_argument("--out", default="results/a_g0")
+    R = sub.add_parser("rydberg-tune", help="tune the Rydberg schedule on pilots (resumable)")
+    R.add_argument("--out", default="results/a_g0")
+    R.add_argument("--workers", type=int, default=1)
     a = p.parse_args(argv)
-    {"env": cmd_env, "landscape": cmd_landscape, "a-g0-tune": cmd_a_g0}[a.cmd](a)
+    {"env": cmd_env, "landscape": cmd_landscape, "a-g0-tune": cmd_a_g0,
+     "rydberg-validate": cmd_rydberg_validate, "rydberg-tune": cmd_rydberg_tune}[a.cmd](a)
 
 
 if __name__ == "__main__":
