@@ -1,0 +1,52 @@
+{
+  "_comment": "Emulator configuration for A-G0 and C-G0. Parameter names are those of pulser.noise_model.NoiseModel in pulser 1.9.1. Units follow Pulser: rates in 1/us, temperature and trap_depth in uK, waists in um, detuning_sigma in rad/us.",
+  "versions": {
+    "python": "3.11.2",
+    "qoolqit": "1.4.0",
+    "pulser": "1.9.1",
+    "pulser_simulation": "1.9.1",
+    "numpy": "2.4.6"
+  },
+  "ideal": {
+    "backend": "pulser_simulation.QutipEmulator, noiseless",
+    "device": "pulser.devices.DigitalAnalogDevice",
+    "device_reason": "AnalogDevice has no DMM in pulser 1.9.1; MWIS weights require local detuning",
+    "hamiltonian_convention": "H = sum_i Omega(t)/2 X_i - sum_i (Delta(t) + eps_i Delta_dmm(t)) n_i + sum_{i<j} C6 / r_ij^6 n_i n_j",
+    "dmm_weights": "eps_i = 1 - w_i (DMM subtracts detuning; heavier vertices receive less penalty)",
+    "noise": "none"
+  },
+  "noisy": {
+    "backend": "pulser_simulation.QutipEmulator with NoiseModel",
+    "device": "pulser.devices.DigitalAnalogDevice",
+    "noise_model": {
+      "runs": 20,
+      "samples_per_run": 1,
+      "state_prep_error": 0.01,
+      "p_false_pos": 0.01,
+      "p_false_neg": 0.07,
+      "temperature": 20.0,
+      "trap_depth": 150.0,
+      "trap_waist": 1.0,
+      "laser_waist": 175.0,
+      "amp_sigma": 0.02,
+      "detuning_sigma": 0.314159,
+      "dephasing_rate": 0.05,
+      "relaxation_rate": 0.01,
+      "dmm_sigma": 0.0
+    },
+    "run_design": "runs = 20 with samples_per_run = 1 gives every one of the K = 20 proposals its own noise realization",
+    "value_mapping": {
+      "relaxation_rate": "1 / T1, T1 = 100 us",
+      "dephasing_rate": "1 / T2, T2 = 20 us (conventional reading; verify against Pulser's dephasing_rate definition before freezing)",
+      "detuning_sigma": "2 * pi * 0.05 rad/us",
+      "temperature_trap_depth_trap_waist": "T = 20 uK, U_trap = 150 uK, w_trap = 1 um; together they set atom-position noise"
+    },
+    "omitted": {
+      "dmm_sigma": "set to 0: no published DMM noise value exists in the source (its benchmark used no local addressing). This is a known limitation for the MWIS arm, whose weights are encoded through the DMM.",
+      "detuning_hf_psd": "omitted: the source states the high-frequency detuning power spectral density values are confidential",
+      "leakage": "omitted, as in the source, where it is expected to be subleading",
+      "amplitude_and_detuning_offsets": "omitted, as in the source's complete noise model"
+    },
+    "source_of_values": "H. Erbin, P.-L. Burdeau, C. Bertrand, T. Ayral, G. Misguich, 'Many-body Quantum Score: a scalable benchmark for digital and analog quantum processors and first test on a commercial neutral atom device', arXiv:2601.03461 (2026), Appendix B.1. The authors state the parameters were provided by Pasqal and characterized in different experiments, lie in the ranges describing neutral-atom QPUs, may vary in time and between machines, and were not characterized on the Ruby machine directly. These are therefore representative neutral-atom values, not device-specific Fresnel specifications; device-specific values require Pasqal Cloud access."
+  }
+}

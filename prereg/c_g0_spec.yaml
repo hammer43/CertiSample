@@ -1,0 +1,60 @@
+# C-G0: fixed-register variational continuation (transfer radius).
+gate: C-G0
+version: 1
+question: >
+  With a fixed register and only local detunings changing, does warm-starting from the
+  previous optimum reach the same solution quality in fewer evaluations than a cold start?
+
+instances:
+  generator: "same as g0_spec.yaml instances.generator"
+  split: {pilot: 20, test: 30}
+  seeds: {pilot: [2000, 2019], test: [3000, 3029]}
+  register: fixed_per_instance      # atom positions never change within an instance
+
+perturbation:
+  base_fields: "h0_i = w_i (MWIS weights, normalized)"
+  delta0_source:
+    method: "median relative update of a classical Lagrangian loop on pilot masters"
+    relative_update: "delta_t = ||h(t+1) - h(t)||_2 / max(||h(t)||_2, 1e-9)"
+    delta0: "median over all t and all pilot trajectories"
+    lagrangian_surrogate: >
+      Pending the B0 application choice: 6 coverage constraints a_j^T x >= b_j per master,
+      each a_j the indicator of a random radius-1.5 lattice neighbourhood, b_j = 1;
+      dualized with subgradient steps mu <- max(0, mu + s_t (b - A x_t)), s_t = 1/(t+1),
+      30 rounds; x_t from exact MWIS on the Lagrangian fields. If B0 fixes an application
+      before C-G0 data is collected, its trajectories replace this surrogate.
+  perturbation_draw: "h1 = h0 + delta * ||h0||_2 * u, u uniform on the unit sphere (seeded), then clipped to [0, 1]"
+  delta_primary: delta0
+  delta_secondary: [0.25, 0.5, 1.0, 2.0, 4.0]      # multiples of delta0, descriptive only
+
+ansatz:
+  family: "piecewise-linear Omega(t) and Delta(t), 4 interior knots each (8 parameters), duration fixed"
+  duration: 20
+  units: "QoolQit dimensionless program units"
+  cold_init: "canonical adiabatic schedule: Omega ramp 0->1->0, Delta linear -4 -> +4"
+  warm_init: "theta*(h0), the optimum found for the previous fields"
+
+optimization:
+  objective: "CVaR_0.1 of sampled energy E(x) = -sum h1_i x_i"
+  optimizer: {name: SPSA, a: 0.2, c: 0.1, alpha: 0.602, gamma: 0.101, seed_per_replicate: true}
+  shots_primary: 1000
+  shots_secondary: [100, exact]
+  target: "CVaR_0.1 <= E1* + 0.02 * |E1*|, E1* the exact optimum for h1"
+  N_eval: "objective evaluations until target first met"
+  N_max: 200
+  censoring: "runs not reaching target record N_eval = N_max and are flagged"
+
+control:
+  optimum_movement: "report whether argmin changes between h0 and h1 (Hamming distance of optima)"
+  purpose: "separate genuine transfer from an unchanged optimum"
+
+statistics:
+  replicates_per_instance: 10
+  aggregation: "average replicates within instance first"
+  transfer: "T(delta0) = 1 - mean N_eval^warm / mean N_eval^cold (capped values)"
+  success: "p_succ = probability of sampling an exact optimum after optimization"
+  report: [T, f_cens_warm, f_cens_cold, delta_p_succ, optimum_movement]
+  bootstrap: {unit: test_instance, n_instances: 30, resamples: 10000, seed: 20260922, interval: 0.95}
+  pass_rule: "LB95(T(delta0)) > 0 AND LB95(p_succ_warm - p_succ_cold) > -0.02"
+
+on_fail: "retire the continuation / ADAPT track"

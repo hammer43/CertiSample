@@ -1,0 +1,113 @@
+# A-G0: configuration-space breadth of native Rydberg constrained sampling.
+# Pre-registered. Scientific changes require editing this file and re-freezing.
+gate: A-G0
+version: 2
+changelog:
+  - "v2 (pilot landscapes only, no sampler data): |Omega| threshold 100 -> 50 and K 50 -> 20, keeping K/|Omega| near 0.25 while tightening eps from ~0.30 to ~0.20; co-primary B changed from swap-component coverage (degenerate: ~3 components, giant share 0.68-0.79) to within-radius coverage fraction."
+question: >
+  Does analog Rydberg sampling cover the exact near-optimal MWIS landscape better than
+  the strongest Omega-blind classical sampler at the same proposal count?
+claim_if_pass: >
+  The analog Rydberg evolution exhibits broader near-optimal configuration-space coverage
+  than the strongest tested Omega-blind classical sampler at the same proposal count.
+  Not quantum advantage, not useful Benders cuts, not useful noise.
+
+instances:
+  generator:
+    lattice: square
+    side: 5                       # 5x5 = 25 sites
+    occupied_sites: 20            # sampled uniformly without replacement
+    blockade: chebyshev_leq_1     # edges between nearest and diagonal neighbours
+    weights: {dist: uniform, low: 0.5, high: 1.0, normalize: max_equals_1}
+  energy: "E(x) = -sum_i w_i x_i ; E* = min E over independent sets"
+  split: {pilot: 20, test: 30}
+  seeds: {pilot: [0, 19], test: [1000, 1029]}   # inclusive ranges, one graph per seed
+  pilot_reuse: never              # pilot graphs never enter the test set
+
+epsilon_rule:
+  grid_relative: [0.0, 0.01, 0.02, 0.03, 0.05, 0.075, 0.10, 0.15, 0.20, 0.30, 0.50]
+  omega: "Omega_eps = {x independent : E(x) <= E* + eps * |E*|}"
+  min_size: 50
+  select: "smallest grid value with |Omega_eps| >= min_size, computed per instance"
+  if_none_qualifies: "use 0.50 and flag the instance"
+  scoring_only: true              # Omega_eps never reaches any arm
+
+arms:
+  classical:
+    randomized_greedy_ls:
+      description: "weight/(deg+1) greedy with randomized tie band, then (1,2)-swap local search"
+      grid: {tie_band: [0.0, 0.05, 0.10, 0.20], ls_rounds: [0, 20, 50]}
+    constraint_aware_gibbs:
+      description: "Gibbs sampling restricted to independent sets (single-site add/remove moves)"
+      grid: {beta: [0.5, 1, 2, 4, 8, 16], sweeps: [50, 200], burn_in_sweeps: 100}
+    simulated_annealing_is:
+      description: "annealing on independent sets, geometric beta schedule"
+      grid: {beta_final: [4, 8, 16, 32], sweeps: [100, 400]}
+  quantum:
+    rydberg_ideal:
+      config: noise_config.json#ideal
+      schedule_family: "piecewise-linear Omega(t) ramp-up/plateau/ramp-down; Delta(t) linear sweep; DMM detuning eps_i = 1 - w_i (heavier vertices less penalized)"
+      grid: {duration: [5, 10, 20, 40], delta_final: [2.0, 4.0, 6.0], omega_max: [1.0]}
+      units: "QoolQit dimensionless program units"
+      register: "lattice spacing a with blockade radius 1.7a (covers diagonal, excludes distance 2)"
+      feasibility: "sampled bitstrings are checked against the unit-disk graph; violations count as infeasible"
+    rydberg_noisy:
+      config: noise_config.json#noisy
+      schedule: "same frozen schedule as rydberg_ideal"
+      role: diagnostic                # reported only; not part of the pass rule
+  tuning:
+    data: pilot_only
+    objective: "mean rank across the two co-primaries on pilot graphs"
+    rydberg_schedule: "chosen on pilots by the same objective, then frozen"
+
+comparator_selection:
+  pool: [randomized_greedy_ls, constraint_aware_gibbs, simulated_annealing_is]
+  rule: "rank every tuned classical arm on every pilot instance on both co-primaries; lowest mean rank over 20 x 2 comparisons"
+  tie_break: mean_nearest_jaccard
+  frozen_before_test: true
+
+sampling:
+  K_primary: 20                    # raw proposals per replicate
+  K_secondary_curve: [5, 10, 20, 40, 80]
+  replicates_per_instance: 10
+  replicate_seeds: [0, 9]
+  S_definition: "unique(outputs) intersected with Omega_eps"
+  report_separately: [infeasible_fraction, out_of_window_fraction, duplicate_fraction]
+
+metrics:
+  jaccard: "d_J(A,B) = 1 - |A intersect B| / |A union B| ; d_J(empty,empty) = 0"
+  coprimary_A:
+    name: mean_nearest_jaccard
+    formula: "mean over y in Omega_eps of min over x in S of d_J(x,y)"
+    better: lower
+    empty_S: 1.0
+  coprimary_B:
+    name: radius_coverage_fraction
+    radius_rule: "r(G) = median over y in Omega_eps of min over y' in Omega_eps, y' != y, of d_J(y, y'); fixed per instance from the landscape alone"
+    formula: "fraction of y in Omega_eps with min over x in S of d_J(x, y) <= r(G)"
+    better: higher
+    empty_S: 0.0
+  secondary: [swap_component_coverage, size_weighted_component_coverage, component_size_distribution,
+              cardinality_distribution, hamming_mean_nearest, worst_case_jaccard_radius,
+              unique_in_window, energy_distribution]
+  reference_coverage:
+    method: "exact K-center by radius bisection + CP-SAT set-cover feasibility"
+    fallback: "farthest-first, labelled 'reference (approximate)' if CP-SAT times out"
+    cpsat_time_limit_s: 120
+    scoring_only: true
+  pilot_diagnostic: "f_max = fraction of Omega_eps that is maximal; reported, no method change"
+
+statistics:
+  aggregation: "average replicates within instance first"
+  deltas:
+    delta_d: "mean_nearest_jaccard(comparator) - mean_nearest_jaccard(rydberg_ideal)"
+    delta_c: "radius_coverage_fraction(rydberg_ideal) - radius_coverage_fraction(comparator)"
+  bootstrap: {unit: test_instance, n_instances: 30, resamples: 10000, seed: 20260921, interval: 0.95}
+  pass_rule: "LB95(delta_d) > 0 AND LB95(delta_c) > 0"   # intersection-union; no correction
+
+resources:
+  note: "K-matching is proposal matching, not computational matching"
+  classical: [energy_evaluations, vertex_operations, cpu_seconds]
+  quantum: [shots, pulse_duration, variational_evaluations, emulator_seconds]
+
+on_fail: "retire the constrained-sampling track; build no recourse/cut machinery for it"
