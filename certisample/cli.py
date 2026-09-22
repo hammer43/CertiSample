@@ -87,6 +87,22 @@ def cmd_a_g0_test(a):
     print(json.dumps({k: r[k] for k in keys}, indent=2, default=str))
 
 
+def cmd_c_g0(a):
+    from . import c_g0
+    out = Path(a.out)
+    if a.stage == "delta0":
+        r = c_g0.stage_delta0(out)
+        print(json.dumps({k: r[k] for k in ("delta0", "n_updates", "quartiles")}, indent=2))
+    elif a.stage == "validate":
+        r = c_g0.stage_validate(out)
+        print(json.dumps({k: r[k] for k in ("threshold", "max_TV", "passed")}, indent=2))
+    else:
+        r = c_g0.stage_test(out, workers=a.workers, limit=a.limit, reps=a.reps, n_max=a.n_max)
+        keys = ("official", "delta0", "mean_T", "LB95_T", "mean_delta_p_succ", "LB95_delta_p_succ",
+                "f_cens_warm", "f_cens_cold", "f_cens_h0", "frac_optimum_moved", "decision", "interpretation")
+        print(json.dumps({k: r[k] for k in keys}, indent=2, default=str))
+
+
 def main(argv=None):
     p = argparse.ArgumentParser(prog="certisample")
     sub = p.add_subparsers(dest="cmd", required=True)
@@ -111,10 +127,17 @@ def main(argv=None):
     T.add_argument("--no-curve", action="store_true", help="skip the secondary K curve")
     T.add_argument("--limit", type=int, default=None,
                    help="DEV ONLY: first N test graphs; output is marked not official")
+    C = sub.add_parser("c-g0", help="C-G0 continuation gate: delta0 | validate | test")
+    C.add_argument("stage", choices=["delta0", "validate", "test"])
+    C.add_argument("--out", default="results/c_g0")
+    C.add_argument("--workers", type=int, default=1)
+    C.add_argument("--limit", type=int, default=None, help="DEV ONLY: first N test graphs")
+    C.add_argument("--reps", type=int, default=None, help="DEV ONLY: replicates per graph")
+    C.add_argument("--n-max", type=int, default=None, help="DEV ONLY: evaluation cap")
     a = p.parse_args(argv)
     {"env": cmd_env, "landscape": cmd_landscape, "a-g0-tune": cmd_a_g0,
      "rydberg-validate": cmd_rydberg_validate, "rydberg-tune": cmd_rydberg_tune,
-     "a-g0-test": cmd_a_g0_test}[a.cmd](a)
+     "a-g0-test": cmd_a_g0_test, "c-g0": cmd_c_g0}[a.cmd](a)
 
 
 if __name__ == "__main__":

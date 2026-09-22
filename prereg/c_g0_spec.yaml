@@ -1,60 +1,84 @@
 # C-G0: fixed-register variational continuation (transfer radius).
 gate: C-G0
-version: 2
+version: 4
 changelog:
   - "v2: units aligned with g0_spec v3 (drive units, Omega_max = 1.7^-6 J_nn, a = 5 um) to remove the same blockade-radius inconsistency; no C-G0 data existed."
+  - "v3 (before any C-G0 data): 14 atoms on a 4x4 lattice instead of 20 on 5x5, because one 20-atom evaluation takes 70-195 s and the gate needs up to ~360k evaluations; infeasible samples now score energy 0 (v2's objective rewarded blockade violations); a C-G0 emulator validation gate added for arbitrary schedules and the new geometry; N_eval counting, the SPSA form, the Lagrangian surrogate and the ansatz knots made fully explicit. Pass rule, target, cap and margins unchanged."
+  - "v4 (pilot diagnostics only, no test data): (1) the v3 coverage surrogate never binds, since any maximal independent set covers every king neighbourhood; delta0 came out exactly 0 over 600 updates. Replaced by budget constraints, which bind by construction (pilot median delta0 0.044). (2) The v3 CVaR_0.1 target was met by the cold schedule at its first evaluation on 17/20 pilots (cold optimum probability >= 0.10 makes CVaR_0.1 equal E*), so T could never be positive. Objective and target now both use mean sampled energy, and the target closes rho = 0.25 of the cold schedule's gap to the optimum, instance by instance (pilot 2000: SPSA closed that much in ~30-40 evaluations; a fixed 2% gap was unreachable in 200)."
 question: >
   With a fixed register and only local detunings changing, does warm-starting from the
   previous optimum reach the same solution quality in fewer evaluations than a cold start?
 
 instances:
-  generator: "same as g0_spec.yaml instances.generator"
+  generator:
+    lattice: square
+    side: 4                        # 4x4 = 16 sites
+    occupied_sites: 14             # sampled uniformly without replacement
+    blockade: chebyshev_leq_1
+    weights: {dist: uniform, low: 0.5, high: 1.0, normalize: max_equals_1}
   split: {pilot: 20, test: 30}
   seeds: {pilot: [2000, 2019], test: [3000, 3029]}
   register: fixed_per_instance      # atom positions never change within an instance
 
+emulator:
+  backend: "certisample.rydberg.Subspace (as in g0_spec v3): <= 1 nearest-neighbour pair kept exactly, beyond eliminated to second order"
+  device: "pulser.devices.DigitalAnalogDevice, a = 5 um, Omega_max = 1.7^-6 * C6 / a^6"
+  validation:
+    reference: "pulser_simulation.QutipEmulator with CustomWaveform samples identical to the emulator's, QuTiP atol = 1e-12, rtol = 1e-10, nsteps = 1e7"
+    cases: "pilot graphs 2000 and 2001; the cold schedule, and 3 schedules with parameters drawn uniformly from the box (seed 0)"
+    pass: "max TV <= 0.005; if it fails, C-G0 does not run"
+
 perturbation:
-  base_fields: "h0_i = w_i (MWIS weights, normalized)"
+  base_fields: "h0_i = w_i (normalized MWIS weights)"
   delta0_source:
-    method: "median relative update of a classical Lagrangian loop on pilot masters"
+    method: "median relative update of a classical Lagrangian loop on the 20 pilot masters"
     relative_update: "delta_t = ||h(t+1) - h(t)||_2 / max(||h(t)||_2, 1e-9)"
     delta0: "median over all t and all pilot trajectories"
     lagrangian_surrogate: >
-      Pending the B0 application choice: 6 coverage constraints a_j^T x >= b_j per master,
-      each a_j the indicator of a random radius-1.5 lattice neighbourhood, b_j = 1;
-      dualized with subgradient steps mu <- max(0, mu + s_t (b - A x_t)), s_t = 1/(t+1),
-      30 rounds; x_t from exact MWIS on the Lagrangian fields. If B0 fixes an application
-      before C-G0 data is collected, its trajectories replace this surrogate.
-  perturbation_draw: "h1 = h0 + delta * ||h0||_2 * u, u uniform on the unit sphere (seeded), then clipped to [0, 1]"
+      3 budget constraints c_j^T x <= B_j per master; c_j has U[0.5, 1] entries on a random half
+      of the atoms and 0 elsewhere; B_j = 0.6 * c_j^T x0, x0 the unconstrained MWIS
+      (rng seed = pilot seed). Fields h(t) = w - C^T mu(t); x_t = exact MWIS maximizing
+      h(t)^T x; mu <- max(0, mu + s_t (C x_t - B)), s_t = 1/(t+1), mu(0) = 0, 30 rounds.
+      If B0 fixes an application before C-G0 data is collected, its trajectories replace this.
+  perturbation_draw: "h1 = clip(h0 + delta * ||h0||_2 * u, 0, 1), u uniform on the unit sphere, rng seed = [instance seed, 7]"
   delta_primary: delta0
   delta_secondary: [0.25, 0.5, 1.0, 2.0, 4.0]      # multiples of delta0, descriptive only
 
 ansatz:
-  family: "piecewise-linear Omega(t) and Delta(t), 4 interior knots each (8 parameters), duration fixed"
-  duration: 20
-  units: "drive units as in g0_spec v3: time in 1/Omega_max, amplitudes relative to Omega_max, register spacing 5 um"
-  cold_init: "canonical adiabatic schedule: Omega ramp 0 -> Omega_max -> 0, delta linear -4 Omega_max -> +4 Omega_max"
-  warm_init: "theta*(h0), the optimum found for the previous fields"
+  family: >
+    Piecewise-linear Omega(t) and delta(t) on 6 equally spaced knots over T; endpoints fixed
+    (Omega = 0 at both ends; delta = -4 and +4 Omega_max); 4 interior knots each are the
+    8 parameters, in drive units, clipped to Omega in [0, 1] and delta in [-6, 6].
+    Constant DMM amplitude -4 Omega_max with eps_i = 1 - h_i.
+  duration: 20                     # drive units: T = 20 / Omega_max, rounded to 4 ns
+  cold_init: "Omega interior knots all 1.0; delta interior knots on the line -4 -> +4: [-2.4, -0.8, 0.8, 2.4]"
+  warm_init: "theta*(h0): final parameters of a cold-started optimization on h0 (same replicate seed)"
 
 optimization:
-  objective: "CVaR_0.1 of sampled energy E(x) = -sum h1_i x_i"
-  optimizer: {name: SPSA, a: 0.2, c: 0.1, alpha: 0.602, gamma: 0.101, seed_per_replicate: true}
+  objective: "mean sampled energy over the shots; E(x) = -sum_i h1_i x_i for independent sets, E(x) = 0 for any sample violating the blockade graph"
+  optimizer:
+    name: SPSA
+    form: "a_k = a / (k + 1)^alpha, c_k = c / (k + 1)^gamma, Rademacher perturbation, theta <- theta - a_k * g_hat"
+    a: 0.2
+    c: 0.1
+    alpha: 0.602
+    gamma: 0.101
   shots_primary: 1000
-  shots_secondary: [100, exact]
-  target: "CVaR_0.1 <= E1* + 0.02 * |E1*|, E1* the exact optimum for h1"
-  N_eval: "objective evaluations until target first met"
+  shots_secondary: [100, exact]    # descriptive only, optional
+  target: "sampled mean energy <= E1* + rho * (E1_cold - E1*), rho = 0.75; E1* the exact optimum for h1 and E1_cold the exact expected energy of the cold schedule on h1 (the same target for both arms); theta*(h0) uses the analogous target on h0"
+  N_eval: "every objective evaluation counts: the initial point, both SPSA probes, and the target check after each update; N_eval is the count when the target is first met"
   N_max: 200
   censoring: "runs not reaching target record N_eval = N_max and are flagged"
 
 control:
-  optimum_movement: "report whether argmin changes between h0 and h1 (Hamming distance of optima)"
+  optimum_movement: "Hamming distance between the exact MWIS optima for h0 and h1"
   purpose: "separate genuine transfer from an unchanged optimum"
 
 statistics:
   replicates_per_instance: 10
   aggregation: "average replicates within instance first"
   transfer: "T(delta0) = 1 - mean N_eval^warm / mean N_eval^cold (capped values)"
-  success: "p_succ = probability of sampling an exact optimum after optimization"
+  success: "p_succ = exact probability of the optimal bitstring at the final parameters"
   report: [T, f_cens_warm, f_cens_cold, delta_p_succ, optimum_movement]
   bootstrap: {unit: test_instance, n_instances: 30, resamples: 10000, seed: 20260922, interval: 0.95}
   pass_rule: "LB95(T(delta0)) > 0 AND LB95(p_succ_warm - p_succ_cold) > -0.02"

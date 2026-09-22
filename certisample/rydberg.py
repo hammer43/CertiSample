@@ -108,7 +108,7 @@ class Subspace:
         self.ground = index[0]
         # excluded single flips (exciting atom i creates a nearest-neighbour pair):
         # kept only through second-order adiabatic elimination (energy shift below)
-        ex_s, ex_gap_int, ex_eps = [], [], []
+        ex_s, ex_gap_int, ex_eps, ex_atom = [], [], [], []
         for k, s_ in enumerate(states):
             for i in range(n):
                 if (s_ >> i) & 1 or (s_ | (1 << i)) in index:
@@ -117,33 +117,43 @@ class Subspace:
                 ex_s.append(k)
                 ex_gap_int.append(dE)
                 ex_eps.append(self.eps[i])
+                ex_atom.append(i)
         self.ex_s = np.array(ex_s, dtype=np.int64)
         self.ex_gap_int = np.array(ex_gap_int)
         self.ex_eps = np.array(ex_eps)
+        self._ex_atom = np.array(ex_atom, dtype=np.int64)
 
-    def evolve(self, sch: Schedule) -> np.ndarray:
-        """Final-state probabilities over self.states (initial state: all ground).
-        Piecewise-constant Hamiltonian on Pulser's 1 ns sample grid, each step exact
-        (Krylov exponential via scipy expm_multiply)."""
+    def set_fields(self, weights: dict) -> None:
+        """Change only the local fields (DMM weights); the register is untouched."""
+        self.eps = np.array([1.0 - weights[i] for i in range(self.n)])
+        occ = np.array([[(int(s) >> i) & 1 for i in range(self.n)] for s in self.states], dtype=float)
+        self.E_eps = occ @ self.eps
+        if len(self.ex_s):
+            self.ex_eps = self.eps[self._ex_atom]
+
+    def evolve_arrays(self, omega, delta, dmm_amp: float) -> np.ndarray:
+        """Final-state probabilities for per-nanosecond (Omega, delta) samples and a constant
+        DMM amplitude dmm_amp >= 0 (applied as -dmm_amp * eps_i). Initial state: all ground."""
         from scipy.sparse import diags
         from scipy.sparse.linalg import expm_multiply
-        omega, delta = sch.samples()
-        static = self.E_int + sch.delta_final * self.E_eps     # constant DMM = -delta_final
+        static = self.E_int + dmm_amp * self.E_eps
         psi = np.zeros(len(self.states), complex)
         psi[self.ground] = 1.0
-        dt = 1e-3                                              # 1 ns in us
         D = len(self.states)
         for om, de in zip(omega, delta):
             diag = static - de * self.N
             if len(self.ex_s) and om > 0:
-                # second-order shift from virtual coupling to excluded blockaded states:
-                # -(Omega/2)^2 / (E_excluded - E_allowed), gap = J_sum + Df*eps_i - delta
-                gap = self.ex_gap_int + sch.delta_final * self.ex_eps - de
+                gap = self.ex_gap_int + dmm_amp * self.ex_eps - de
                 diag = diag - (0.5 * om) ** 2 * np.bincount(self.ex_s, 1.0 / gap, minlength=D)
             H = diags(diag) + (0.5 * om) * self.X
-            psi = expm_multiply(-1j * dt * H, psi)
+            psi = expm_multiply(-1j * 1e-3 * H, psi)
         p = np.abs(psi) ** 2
         return p / p.sum()
+
+    def evolve(self, sch: Schedule) -> np.ndarray:
+        """A-G0 schedule family (constant DMM amplitude = delta_final)."""
+        omega, delta = sch.samples()
+        return self.evolve_arrays(omega, delta, sch.delta_final)
 
     def sample(self, probs: np.ndarray, K: int, rng) -> list[int]:
         return [int(self.states[k]) for k in rng.choice(len(probs), size=K, p=probs)]
@@ -182,3 +192,28 @@ def pulser_exact_probs(positions, weights, sch: Schedule, **qutip_options) -> di
 def total_variation(p: dict, q: dict) -> float:
     keys = set(p) | set(q)
     return 0.5 * sum(abs(p.get(k, 0.0) - q.get(k, 0.0)) for k in keys)
+
+
+def pulser_exact_probs_arrays(positions, weights, omega, delta, dmm_amp: float, **qutip_options) -> dict:
+    """Exact Pulser reference for arbitrary per-ns samples (CustomWaveform)."""
+    from pulser import Pulse, Register, Sequence
+    from pulser.devices import DigitalAnalogDevice
+    from pulser.waveforms import ConstantWaveform, CustomWaveform
+    from pulser_simulation import QutipEmulator
+    n = len(positions)
+    reg = Register({f"q{i}": (x * SPACING_UM, y * SPACING_UM) for i, (x, y) in enumerate(positions)})
+    seq = Sequence(reg, DigitalAnalogDevice)
+    seq.declare_channel("r", "rydberg_global")
+    seq.config_detuning_map(reg.define_detuning_map({f"q{i}": 1.0 - weights[i] for i in range(n)}), "dmm_0")
+    T = len(omega)
+    seq.add_dmm_detuning(ConstantWaveform(T, -dmm_amp), "dmm_0")
+    seq.add(Pulse(CustomWaveform(np.asarray(omega)), CustomWaveform(np.asarray(delta)), 0), "r",
+            protocol="no-delay")
+    psi = QutipEmulator.from_sequence(seq).run(**qutip_options).get_final_state().full().ravel()
+    probs = np.abs(psi) ** 2
+    out = {}
+    for idx in np.nonzero(probs > 1e-12)[0]:
+        bits = format(int(idx), f"0{n}b")
+        m = sum(1 << i for i, b in enumerate(bits) if b == "0")
+        out[m] = out.get(m, 0.0) + float(probs[idx])
+    return out
