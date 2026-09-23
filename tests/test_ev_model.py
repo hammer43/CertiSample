@@ -1,4 +1,4 @@
-"""Regression tests for the EV application model (spec v1.4.1)."""
+"""Regression tests for the EV application model (spec v1.4.2)."""
 import math
 
 import networkx as nx
@@ -74,6 +74,38 @@ def test_opening_costs(net):
     assert all(v > 0 for v in I.opening_costs(100.0).values())   # high phi: all positive
 
 
+def test_expanded_matches_thesis_projected_arc_rules(net):
+    """Projected A1-A5 construction: A1/A2 appear as zero-distance A4/A5 cases."""
+    I = make_instance(net, 0, 20)
+    E = expanded.build(I)
+    R = net.R_EV
+    phys = set(I.sites)
+    for k in I.od:
+        o, d = k
+        arc = {(t, h): ell for t, h, ell in E.arcs[k]}
+        assert (("O", k), ("D", k)) not in arc  # no direct artificial-to-artificial source arc
+        for j in phys:
+            key = (("O", k), j)
+            should = net.sp.get(o, {}).get(j, math.inf) <= 0.5 * R
+            assert (key in arc) == should
+            if should:
+                assert abs(arc[key] - net.sp[o][j] / R) < 1e-12
+        for i in phys:
+            key = (i, ("D", k))
+            should = net.sp.get(i, {}).get(d, math.inf) <= 0.5 * R
+            assert (key in arc) == should
+            if should:
+                assert abs(arc[key] - net.sp[i][d] / R) < 1e-12
+            for j in phys:
+                if i == j:
+                    continue
+                key2 = (i, j)
+                should2 = net.sp.get(i, {}).get(j, math.inf) <= R
+                assert (key2 in arc) == should2
+                if should2:
+                    assert abs(arc[key2] - net.sp[i][j] / R) < 1e-12
+
+
 def test_recourse_integrality_and_paths(net):
     I = make_instance(net, 0, 40)
     E = expanded.build(I)
@@ -109,8 +141,9 @@ def test_cut_is_tight_at_generator_and_valid_elsewhere(net):
             break
     assert y is not None
     lhs = r["alpha"] + sum(r["beta"][j] * y[j] for j in I.sites)
-    assert abs(lhs - r["Q"]) < 1e-6 * len(I.od)                  # tight at generator
-                                                                 # (dual-face slack per pair)
+    assert r["face_budget_nominal"] == pytest.approx(len(I.od) * recourse.FACE_TOL)
+    assert abs(lhs - r["Q"]) == pytest.approx(r["face_drift"])
+    assert r["face_drift"] < 1e-6                               # runtime cut-tightness audit
     for _ in range(6):
         y2 = {i: int(v) for i, v in zip(I.sites, rng.integers(0, 2, len(I.sites)))}
         r2 = recourse.evaluate(I, E, y2, with_duals=False)

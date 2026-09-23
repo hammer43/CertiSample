@@ -1,15 +1,17 @@
-"""Expanded network (model spec section 4).
+"""Expanded network (model spec section 4; Kınay thesis §2.2.2).
 
-IMPLEMENTATION NOTE — needs confirmation against the thesis equations before production.
-The spec names four arc families; this module implements them as:
-  (a) physical arcs i -> j for candidate-eligible physical nodes with sp(i,j) <= R_EV;
-  (b) artificial-origin access arcs Oa_k -> j with sp(O_k, j) <= R_EV / 2   (half-range departure);
-  (c) artificial-destination access arcs i -> Da_k with sp(i, D_k) <= R_EV / 2 (half-range arrival);
-  (d) a direct arc Oa_k -> Da_k when sp(O_k, D_k) <= R_EV (never active for retained pairs,
-      which satisfy D_k > R_EV by construction, but included for completeness).
-Arc energy length is ell = sp / R_EV; artificial connectors carry ell = 0 only where the
-underlying road distance is zero. Reaching a physical node j requires a station at j
-(spec section 7 activation constraint); artificial nodes need no station.
+The thesis construction has A1: Oa_k -> O_k (zero length), A2: D_k -> Da_k
+(zero length), A3 physical i -> j when shortest-path distance <= R_EV, and
+half-range A4/A5 access/egress arcs at R_EV/2.
+
+CertiSample fixes y_j = 0 outside the sampled candidate-site set, so such physical
+nodes cannot be charging stops. This module therefore uses the exact projected
+network on candidate-eligible physical nodes. For candidate origins/destinations,
+the zero-length A1/A2 connectors are already the zero-distance cases of A4/A5.
+No direct Oa_k -> Da_k arc is part of the source construction.
+
+Arc energy length is ell = shortest-path distance / R_EV. Reaching a physical
+head node requires an open station there; artificial destination nodes do not.
 """
 from __future__ import annotations
 
@@ -40,7 +42,5 @@ def build(inst, half_range: float = 0.5) -> Expanded:
             for j in phys:
                 if i != j and net.sp.get(i, {}).get(j, float("inf")) <= R:
                     A.append((i, j, net.sp[i][j] / R))
-        if net.sp.get(o, {}).get(d, float("inf")) <= R:
-            A.append((("O", k), ("D", k), net.sp[o][d] / R))
         arcs[k] = A
     return Expanded(arcs, phys)

@@ -18,6 +18,14 @@ import highspy
 import numpy as np
 
 TOL = 1e-9
+FACE_TOL = 1e-10
+LP_KKT_TOL = 1e-10
+
+
+def nominal_face_budget(n_pairs: int, face_tol: float = FACE_TOL) -> float:
+    """Nominal aggregate optimal-face drift budget: |K| * tau_face (spec v1.4.2)."""
+    return n_pairs * face_tol
+
 
 
 def _adj(arcs, open_nodes):
@@ -63,9 +71,15 @@ def _configure(h):
     h.setOptionValue("threads", 1)
     h.setOptionValue("random_seed", 0)
     h.setOptionValue("presolve", "off")
-
-
-FACE_TOL = 1e-10
+    h.setOptionValue("solver", "simplex")
+    # FACE_TOL is 1e-10, so the LP/KKT tolerances must not be looser than it.
+    # HiGHS defaults are 1e-7 and would make the face budget meaningless.
+    h.setOptionValue("kkt_tolerance", LP_KKT_TOL)
+    h.setOptionValue("primal_feasibility_tolerance", LP_KKT_TOL)
+    h.setOptionValue("dual_feasibility_tolerance", LP_KKT_TOL)
+    h.setOptionValue("primal_residual_tolerance", LP_KKT_TOL)
+    h.setOptionValue("dual_residual_tolerance", LP_KKT_TOL)
+    h.setOptionValue("optimality_tolerance", LP_KKT_TOL)
 
 
 def dual_for_pair(arcs, src, dst, phys, y, cost_scale, Qk, face_tol: float = FACE_TOL):
@@ -142,4 +156,7 @@ def evaluate(inst, exp, y: dict, with_duals: bool = True) -> dict:
             alpha += lam[src] - lam[dst]
             for j in exp.physical:
                 beta[j] += nu[j]
-    return dict(feasible=True, Q=Q, paths=paths, alpha=alpha, beta=beta)
+    face_lhs = alpha + sum(beta[j] * y.get(j, 0) for j in exp.physical)
+    return dict(feasible=True, Q=Q, paths=paths, alpha=alpha, beta=beta,
+                face_drift=abs(face_lhs - Q),
+                face_budget_nominal=nominal_face_budget(len(inst.od)))
