@@ -103,6 +103,12 @@ def cmd_c_g0(a):
         print(json.dumps({k: r[k] for k in keys}, indent=2, default=str))
 
 
+def cmd_ev_data(a):
+    from .ev.data import COMMIT, fetch
+    print(json.dumps({k: str(v) for k, v in fetch(a.network, a.out).items()} |
+                     {"commit": COMMIT}, indent=2))
+
+
 def main(argv=None):
     p = argparse.ArgumentParser(prog="certisample")
     sub = p.add_subparsers(dest="cmd", required=True)
@@ -134,10 +140,14 @@ def main(argv=None):
     C.add_argument("--limit", type=int, default=None, help="DEV ONLY: first N test graphs")
     C.add_argument("--reps", type=int, default=None, help="DEV ONLY: replicates per graph")
     C.add_argument("--n-max", type=int, default=None, help="DEV ONLY: evaluation cap")
+    D = sub.add_parser("ev-data", help="fetch pinned TNTP data for the EV model")
+    D.add_argument("--network", default="SiouxFalls",
+                   choices=["SiouxFalls", "Anaheim", "Chicago-Sketch"])
+    D.add_argument("--out", default="data/tntp")
     a = p.parse_args(argv)
     {"env": cmd_env, "landscape": cmd_landscape, "a-g0-tune": cmd_a_g0,
      "rydberg-validate": cmd_rydberg_validate, "rydberg-tune": cmd_rydberg_tune,
-     "a-g0-test": cmd_a_g0_test, "c-g0": cmd_c_g0}[a.cmd](a)
+     "a-g0-test": cmd_a_g0_test, "c-g0": cmd_c_g0, "ev-data": cmd_ev_data}[a.cmd](a)
 
 
 if __name__ == "__main__":
